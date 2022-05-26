@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -56,15 +57,16 @@ type content struct {
 
 // Holds sitewide environment variables.
 type env struct {
-	local   string
-	baseurl string
-	cms     cms
+	Local   bool   `json:"local"`
+	Baseurl string `json:"baseUrl"`
+	Cms     cms    `json:"cms"`
 }
 type cms struct {
-	repo        string
-	redirectUrl string
-	appId       string
-	branch      string
+	Repo        string              `json:"repo"`
+	RedirectUrl string              `json:"redirectUrl"`
+	AppId       string              `json:"appId"`
+	Branch      string              `json:"branch"`
+	ImageSizes  map[string][][2]int `json:"imageSizes"`
 }
 
 // DataSource builds json list from "content/" directory.
@@ -78,24 +80,24 @@ func DataSource(buildPath string, siteConfig readers.SiteConfig) error {
 	contentJSPath := buildPath + "/spa/ejected/content.js"
 	envPath := buildPath + "/spa/ejected/env.js"
 	env := env{
-		local:   strconv.FormatBool(Local),
-		baseurl: siteConfig.BaseURL,
-		cms: cms{
-			repo:        siteConfig.CMS.Repo,
-			redirectUrl: siteConfig.CMS.RedirectUrl,
-			appId:       siteConfig.CMS.AppId,
-			branch:      siteConfig.CMS.Branch,
+		Local:   Local,
+		Baseurl: siteConfig.BaseURL,
+		Cms: cms{
+			Repo:        siteConfig.CMS.Repo,
+			RedirectUrl: siteConfig.CMS.RedirectUrl,
+			AppId:       siteConfig.CMS.AppId,
+			Branch:      siteConfig.CMS.Branch,
+			ImageSizes:  siteConfig.CMS.ImageSizes,
 		},
 	}
 
 	// Create env magic prop.
-	envStr := "export let env = { local: " + env.local +
-		", baseurl: '" + env.baseurl +
-		"', cms: { repo: '" + env.cms.repo +
-		"', redirectUrl: '" + env.cms.redirectUrl +
-		"', appId: '" + env.cms.appId +
-		"', branch: '" + env.cms.branch +
-		"' } };"
+	envJson, err := json.Marshal(env)
+	if err != nil {
+		fmt.Printf("Unable to marshal env to JSON")
+		return err
+	}
+	envStr := "export let env = " + string(envJson) + ";"
 
 	// no dirs needed for mem
 	if common.UseMemFS {
@@ -154,7 +156,7 @@ func DataSource(buildPath string, siteConfig readers.SiteConfig) error {
 
 	for _, currentContent := range allContent {
 
-		if err := createProps(currentContent, allContentStr, env); err != nil {
+		if err := createProps(currentContent, allContentStr, string(envJson)); err != nil {
 			return err
 		}
 
@@ -167,7 +169,7 @@ func DataSource(buildPath string, siteConfig readers.SiteConfig) error {
 			return err
 		}
 		for _, paginatedContent := range allPaginatedContent {
-			if err = createProps(paginatedContent, allContentStr, env); err != nil {
+			if err = createProps(paginatedContent, allContentStr, string(envJson)); err != nil {
 				return err
 			}
 
@@ -332,18 +334,13 @@ func getContent(path string, info os.FileInfo, err error, siteConfig readers.Sit
 	return contentFileCounter, allContentStr, allContent, nil
 }
 
-func createProps(currentContent content, allContentStr string, env env) error {
+func createProps(currentContent content, allContentStr string, env string) error {
 	componentSignature := "layouts_content_" + currentContent.contentType + "_svelte"
 	_, err := SSRctx.RunScript("var props = {content: "+currentContent.contentDetails+
 		", layout: "+componentSignature+
 		", allContent: "+allContentStr+
-		", env: {local: "+env.local+
-		", baseurl: '"+env.baseurl+
-		"', cms: { repo: '"+env.cms.repo+
-		"', redirectUrl: '"+env.cms.redirectUrl+
-		"', appId: '"+env.cms.appId+
-		"', branch: '"+env.cms.branch+
-		"'}}};", "create_ssr")
+		", env: "+env+
+		"};", "create_ssr")
 	if err != nil {
 		return fmt.Errorf("Could not create props: %w%s\n", err, common.Caller())
 	}

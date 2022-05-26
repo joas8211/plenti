@@ -21,10 +21,11 @@ type SiteConfig struct {
 	} `json:"local"`
 	Routes map[string]string `json:"routes"`
 	CMS    struct {
-		Repo        string `json:"repo"`
-		RedirectUrl string `json:"redirect_url"`
-		AppId       string `json:"app_id"`
-		Branch      string `json:"branch"`
+		Repo        string              `json:"repo"`
+		RedirectUrl string              `json:"redirect_url"`
+		AppId       string              `json:"app_id"`
+		Branch      string              `json:"branch"`
+		ImageSizes  map[string][][2]int `json:"image_sizes"`
 	} `json:"cms"`
 }
 
